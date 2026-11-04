@@ -21,12 +21,15 @@ Alle Geräte stehen auf einem Holztisch, laufen an **einer gemeinsamen Clock** u
 | **FX-9** | – | Step-FX-Pinsel (Ratchet, Hall-/Delay-Throw, Crush, Filter, Oktave), Bus-Einstellungen, Live-Pads |
 | **SQ-16** Arranger | – | Sektionen (Verse, Chorus, Drop …) als Szenen, Song-Kette |
 
+**Recorder:** Nimmt den fertig gemasterten Stereo-Master der laufenden Session auf. ● REC (oder Taste **R**) startet die Aufnahme und die Session gleich mit, ■ stoppt, ▶ hört die Aufnahme an, **⤓ WAV** speichert sie als WAV (Stereo, 24 Bit).
+
 **Global:** Tonart, BPM (inkl. Tap), Swing und 8 Moods von *Fröhlich* bis *Hölle*. Jeder Mood hat seine eigene Tonleiter, Akkordfärbung und Klangfarbe.
 Jeder Sequenzer hat **4 Parts** mit **16 – 64 Steps** und eine programmierbare **Part-Kette** (z. B. `3x1 3 2x1 4`).
 
 ## Bedienung
 
 - **Leertaste** – Play/Stop
+- **R** – Aufnahme starten/stoppen
 - **Tasten 1–8** – Live-Pads halten (Wash, Echo, Roll ¼ / ⅛ / 1/16 / 1/32, Riser, Kill Low)
 - Knöpfe: ziehen (Shift = fein), Mausrad, Doppelklick = Reset
 - Steps: klicken oder über mehrere Steps malen

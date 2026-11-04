@@ -532,11 +532,48 @@ function setMood(i){ S.mood = i; UI.moods.forEach((b,j) => b.classList.toggle('o
 function applyMoodLook(){ document.documentElement.style.setProperty('--mood', MOODS[S.mood].color); document.body.dataset.mood = MOODS[S.mood].id;
   if(UI.moodInfo) UI.moodInfo.textContent = `${NOTE_NAMES[S.key]} ${MOODS[S.mood].mode}`; }
 function setMode(song){ S.songMode = song; UI.modeBtns.forEach((b,j) => b.classList.toggle('on', (j===1)===song)); if(E.playing){ stopPlay(); clearPH(); startPlay(); } UI.posSec.textContent = song ? 'SONG' : 'PATTERN'; save(); }
+/* ---------- Aufnahme ---------- */
+const fmtT = sec => `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(Math.floor(sec%60)).padStart(2,'0')}`;
+function toggleRec(){
+  if(!ctx) return;
+  if(REC.state === 'rec'){ recStop(); return; }
+  if(REC.state !== 'idle') return;
+  if(REC.buf && !confirm('Neue Aufnahme starten? Die bisherige Aufnahme wird überschrieben (vorher mit ⤓ WAV sichern).')) return;
+  recStart().then(() => { if(!E.playing) togglePlay(); });
+}
+function recTimeUpd(){
+  if(!UI.recTime) return;
+  if(REC.state === 'rec') UI.recTime.textContent = fmtT(REC.frames / ctx.sampleRate);
+  else if(REC.playSrc) UI.recTime.textContent = fmtT(Math.min(ctx.currentTime - REC.playT0, REC.buf.duration)) + ' / ' + fmtT(REC.buf.duration);
+  else UI.recTime.textContent = REC.buf ? fmtT(REC.buf.duration) : '--:--';
+}
+function onRecChange(){
+  if(!UI.rec) return;
+  UI.rec.classList.toggle('on', REC.state === 'rec'); UI.rec.classList.toggle('busy', REC.state === 'finishing');
+  UI.recTime.classList.toggle('on', REC.state === 'rec');
+  UI.recPlay.disabled = !REC.buf || REC.state !== 'idle'; UI.recPlay.classList.toggle('on', !!REC.playSrc);
+  UI.recDl.disabled = !REC.buf || REC.state !== 'idle';
+  UI.recStop.disabled = REC.state !== 'rec' && !REC.playSrc;
+  recTimeUpd();
+}
+function downloadRec(){
+  if(!REC.buf) return;
+  const d = new Date(), pad = n => String(n).padStart(2,'0');
+  const name = `techno-session_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}_${S.bpm}bpm_${NOTE_NAMES[S.key].replace('♯','s')}-${MOODS[S.mood].id}.wav`;
+  const url = URL.createObjectURL(recWav()), a = h('a',{href:url, download:name});
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast('WAV gespeichert: ' + name);
+}
 let taps = [];
 function buildHeader(){
   const top = $('#top'); top.innerHTML = '';
   UI.playBtn = h('button',{class:'play', title:'Play / Stop (Leertaste)', onclick:togglePlay}, '▶');
   UI.posBar = h('div',{class:'pbn'}, '001.1.1'); UI.posSec = h('div',{class:'psn'}, S.songMode ? 'SONG' : 'PATTERN'); UI.beat = h('i',{class:'beat'});
+  UI.rec = h('button',{class:'recb', title:'Master aufnehmen (Taste R) – startet die Session mit, falls sie steht', onclick:toggleRec}, h('i'), 'REC');
+  UI.recPlay = h('button',{class:'rbtn', title:'Aufnahme anhören', onclick:() => { if(!REC.buf) return; if(REC.playSrc) recPlayStop(); else { if(E.playing) togglePlay(); recPlay(); } }}, '▶');
+  UI.recStop = h('button',{class:'rbtn', title:'Aufnahme / Wiedergabe stoppen', onclick:() => { if(REC.state === 'rec') recStop(); recPlayStop(); }}, '■');
+  UI.recDl = h('button',{class:'rbtn dl', title:'Aufnahme als WAV (Stereo, 24 Bit) speichern', onclick:downloadRec}, '⤓ WAV');
+  UI.recTime = h('div',{class:'rectime'}, '--:--');
   const bpmIn = h('input',{type:'number', min:60, max:200, step:1, class:'bpmin'}); bpmIn.value = S.bpm;
   const setBpm = v => { S.bpm = clamp(Math.round(v*10)/10, 60, 200); bpmIn.value = S.bpm; applyBus(); renderArr(); save(); };
   bpmIn.onchange = () => setBpm(+bpmIn.value || 128); bpmIn.onkeydown = e => e.stopPropagation();
@@ -558,6 +595,7 @@ function buildHeader(){
   top.append(
     h('div',{class:'brand'}, 'TECHNO', h('span',{}, '//'), 'WORKSTATION'),
     h('div',{class:'grp transport'}, UI.playBtn, h('div',{class:'poslcd'}, UI.posBar, UI.posSec, UI.beat)),
+    h('div',{class:'grp recgrp'}, UI.rec, UI.recTime, UI.recPlay, UI.recStop, UI.recDl),
     h('div',{class:'grp'}, h('label',{}, 'BPM'), h('button',{class:'nud', onclick:() => setBpm(S.bpm-1)}, '−'), bpmIn, h('button',{class:'nud', onclick:() => setBpm(S.bpm+1)}, '+'), tap),
     h('div',{class:'grp'}, h('label',{}, 'KEY'), piano, UI.keyName),
     h('div',{class:'grp moodgrp'}, h('label',{}, 'MOOD'), h('div',{class:'moods'}, ...UI.moods)),
@@ -583,7 +621,7 @@ function buildAll(){
   M.append(buildMixer(), buildFX());
   R.append(buildAcid(), buildLead(), buildChords());
   B.append(buildArranger());
-  applyMoodLook(); fitZoom();
+  applyMoodLook(); fitZoom(); onRecChange();
 }
 function onStep(cur){
   for(const id of DEV_IDS){ const u = UI.dev[id]; if(!u) continue; const D = S.dev[id], p = cur.pos[id];
@@ -606,6 +644,7 @@ function frame(){
       for(const k in UI.meters){ const m = UI.meters[k], an = k==='master' ? E.M.an : E.ch[k].an; an.getFloatTimeDomainData(mbuf);
         let pk = 0; for(let i=0;i<mbuf.length;i++){ const a = Math.abs(mbuf[i]); if(a > pk) pk = a; }
         const v = clamp((20*Math.log10(pk+1e-6)+48)/48, 0, 1); m.v = Math.max(v, m.v-0.02); m.el.style.transform = `scaleY(${m.v.toFixed(3)})`; m.el.classList.toggle('hot', pk > 0.97); }
+      if(REC.state === 'rec' || REC.playSrc) recTimeUpd();
       if(UI.gr){ const r = typeof E.M.lim.reduction === 'number' ? E.M.lim.reduction : 0; UI.gr.style.width = (clamp(-r/12,0,1)*100).toFixed(1)+'%'; }
     }
   }
@@ -625,6 +664,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', e => {
     if(e.target.matches('input,select,textarea')) return;
     if(e.code === 'Space'){ e.preventDefault(); if(!ov.classList.contains('hide')){ ctx.resume(); ov.classList.add('hide'); } togglePlay(); return; }
+    if((e.key === 'r' || e.key === 'R') && !e.repeat && !e.metaKey && !e.ctrlKey){ toggleRec(); return; }
     const p = PADS.find(x => x.key === e.key); if(p && !e.repeat) p.down();
   });
   document.addEventListener('keyup', e => { const p = PADS.find(x => x.key === e.key); if(p) p.up(); });

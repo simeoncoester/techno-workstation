@@ -542,3 +542,78 @@ function liveRiser(on){
     E.riser = {n,g};
   } else if(E.riser){ const {n,g} = E.riser; g.gain.cancelScheduledValues(now); g.gain.setTargetAtTime(0,now,0.3); n.stop(now+2); E.riser = null; }
 }
+
+/* ============================================================
+   Recorder: nimmt den Master-Ausgang (Stereo) auf, Export als WAV 24 Bit
+   ============================================================ */
+const REC = {state:'idle', chunks:[[],[]], frames:0, buf:null, node:null, kind:null, playSrc:null, playT0:0};
+const REC_WORKLET = `class TwsRec extends AudioWorkletProcessor{
+  constructor(){ super(); this.on=false; this.n=0; this.L=new Float32Array(4096); this.R=new Float32Array(4096);
+    this.port.onmessage=e=>{ this.on=e.data; if(!this.on){ if(this.n) this.port.postMessage({t:'d',L:this.L.slice(0,this.n),R:this.R.slice(0,this.n)}); this.n=0; this.port.postMessage({t:'end'}); } }; }
+  process(ins){ const i=ins[0];
+    if(this.on && i && i.length){ const l=i[0], r=i[1]||i[0];
+      for(let k=0;k<l.length;k++){ this.L[this.n]=l[k]; this.R[this.n]=r[k];
+        if(++this.n===4096){ this.port.postMessage({t:'d',L:this.L,R:this.R},[this.L.buffer,this.R.buffer]); this.L=new Float32Array(4096); this.R=new Float32Array(4096); this.n=0; } } }
+    return true; } }
+registerProcessor('tws-rec', TwsRec);`;
+function recNotify(){ if(typeof onRecChange === 'function') onRecChange(); }
+async function recInit(){
+  if(REC.node) return;
+  try {
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([REC_WORKLET],{type:'application/javascript'})));
+    const n = new AudioWorkletNode(ctx,'tws-rec',{numberOfInputs:1, numberOfOutputs:1, outputChannelCount:[2], channelCount:2, channelCountMode:'explicit'});
+    n.port.onmessage = e => recMsg(e.data); REC.node = n; REC.kind = 'worklet';
+  } catch(err){   // Fallback für ältere Browser
+    const n = ctx.createScriptProcessor(4096,2,2);
+    n.onaudioprocess = e => { if(REC.state !== 'rec') return; const ib = e.inputBuffer; recMsg({t:'d', L:ib.getChannelData(0).slice(), R:ib.getChannelData(1).slice()}); };
+    REC.node = n; REC.kind = 'sp';
+  }
+  E.M.clip.connect(REC.node);
+  REC.node.connect(gn(0)).connect(ctx.destination);
+}
+function recMsg(m){
+  if(m.t === 'd'){ if(REC.state === 'idle') return; REC.chunks[0].push(m.L); REC.chunks[1].push(m.R); REC.frames += m.L.length; }
+  else if(m.t === 'end') recFinalize();
+}
+async function recStart(){
+  await ctx.resume(); await recInit(); recPlayStop();
+  REC.chunks = [[],[]]; REC.frames = 0; REC.buf = null; REC.state = 'rec';
+  if(REC.kind === 'worklet') REC.node.port.postMessage(true);
+  recNotify();
+}
+function recStop(){
+  if(REC.state !== 'rec') return;
+  REC.state = 'finishing';
+  if(REC.kind === 'worklet') REC.node.port.postMessage(false); else recFinalize();
+  recNotify();
+}
+function recFinalize(){
+  const n = REC.frames;
+  if(n){ const b = ctx.createBuffer(2, n, ctx.sampleRate);
+    for(let c=0;c<2;c++){ const d = b.getChannelData(c); let o = 0; for(const ch of REC.chunks[c]){ d.set(ch,o); o += ch.length; } }
+    REC.buf = b; }
+  REC.chunks = [[],[]]; REC.state = 'idle'; recNotify();
+}
+function recPlay(){
+  if(!REC.buf) return; recPlayStop();
+  const s = ctx.createBufferSource(); s.buffer = REC.buf; s.connect(ctx.destination);   // direkt raus, nicht durch den Master
+  s.onended = () => { if(REC.playSrc === s){ REC.playSrc = null; recNotify(); } };
+  s.start(); REC.playSrc = s; REC.playT0 = ctx.currentTime; recNotify();
+}
+function recPlayStop(){ if(REC.playSrc){ const s = REC.playSrc; REC.playSrc = null; try { s.stop(); } catch(e){} recNotify(); } }
+function recWav(){
+  const b = REC.buf, n = b.length, sr = b.sampleRate, size = n*2*3;
+  const out = new Uint8Array(44 + size), v = new DataView(out.buffer);
+  const ws = (o,s) => { for(let i=0;i<s.length;i++) out[o+i] = s.charCodeAt(i); };
+  ws(0,'RIFF'); v.setUint32(4,36+size,true); ws(8,'WAVE'); ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+  v.setUint16(22,2,true); v.setUint32(24,sr,true); v.setUint32(28,sr*6,true); v.setUint16(32,6,true); v.setUint16(34,24,true);
+  ws(36,'data'); v.setUint32(40,size,true);
+  const L = b.getChannelData(0), R = b.getChannelData(1); let o = 44;
+  for(let i=0;i<n;i++){
+    let s = L[i] > 1 ? 1 : L[i] < -1 ? -1 : L[i], x = Math.round(s < 0 ? s*8388608 : s*8388607);
+    out[o++] = x & 255; out[o++] = (x >> 8) & 255; out[o++] = (x >> 16) & 255;
+    s = R[i] > 1 ? 1 : R[i] < -1 ? -1 : R[i]; x = Math.round(s < 0 ? s*8388608 : s*8388607);
+    out[o++] = x & 255; out[o++] = (x >> 8) & 255; out[o++] = (x >> 16) & 255;
+  }
+  return new Blob([out], {type:'audio/wav'});
+}

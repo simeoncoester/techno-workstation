@@ -39,6 +39,20 @@ select,input{ font:inherit; }
 .zl{ color:#888; font-size:10px; margin-left:4px; }
 .zoomsel{ background:#222; color:#ddd; border:1px solid #000; border-radius:4px; height:26px; }
 
+/* Recorder */
+.recgrp{ background:rgba(0,0,0,.3); padding:4px 6px; border-radius:6px; box-shadow:inset 0 1px 3px rgba(0,0,0,.6); }
+.recb{ height:34px; padding:0 10px; border-radius:5px; border:1px solid #000; background:linear-gradient(#4a4d55,#2a2c31); color:#ff6a5a; font-weight:900; letter-spacing:1px; display:flex; align-items:center; gap:6px; }
+.recb i{ width:11px; height:11px; border-radius:50%; background:#7a1a12; box-shadow:inset 0 1px 2px #000; }
+.recb.on{ background:linear-gradient(#d8261a,#8e130b); color:#fff; box-shadow:0 0 16px #f32; }
+.recb.on i{ background:#fff; animation:blink .8s steps(2) infinite; }
+.recb.busy{ opacity:.6; }
+.rectime{ min-width:52px; height:30px; line-height:26px; text-align:center; background:#1a0e0e; color:#ff8a7a; border:2px solid #000; border-radius:4px; font-family:"SF Mono",Menlo,monospace; font-size:12px; font-weight:700; padding:0 6px; white-space:nowrap; }
+.rectime.on{ color:#fff; background:#5a0d08; }
+.rbtn{ height:30px; min-width:30px; padding:0 8px; border-radius:4px; border:1px solid #000; background:linear-gradient(#55585f,#33353a); color:#eee; font-weight:700; }
+.rbtn.on{ background:linear-gradient(#2c7a3a,#185626); box-shadow:0 0 10px #3f6; }
+.rbtn.dl{ font-size:10px; letter-spacing:.5px; }
+.rbtn:disabled{ opacity:.35; cursor:default; }
+
 /* ================= Der Tisch ================= */
 #tablewrap{ min-height:calc(100vh - 60px); overflow-x:auto; transition:background .6s;
   background:
