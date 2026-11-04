@@ -1,5 +1,7 @@
 # Techno Workstation 🎛️
 
+**▶ Live spielen: https://simeoncoester.github.io/techno-workstation/**
+
 Eine komplette Techno-Groovebox im Browser – ohne Installation, ohne Server, ohne Abhängigkeiten.
 Alle Geräte stehen auf einem Holztisch, laufen an **einer gemeinsamen Clock** und treffen sich in einem Live-Mixer mit Mastering-Kette.
 
