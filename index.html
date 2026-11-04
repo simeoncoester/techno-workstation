@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Techno Workstation</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Techno Workstation – Drum Machines, Acid-Bass, Kick/Sub, Lead, Chord-Generator, Mixer, FX und Song-Arranger im Browser.">
+<meta name="theme-color" content="#18191c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Techno WS">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top"></header>
+<main id="tablewrap">
+  <div id="table">
+    <div id="col-left" class="col"></div>
+    <div id="col-mid" class="col"></div>
+    <div id="col-right" class="col"></div>
+    <div id="row-bottom"></div>
+  </div>
+</main>
+<div id="toast"></div>
+<div id="startOverlay">
+  <div class="ovbox">
+    <h1>TECHNO<span>//</span>WORKSTATION</h1>
+    <p>Klicken, um das Audio zu starten</p>
+    <small>Leertaste = Play/Stop · Tasten 1–8 = Live-Pads · alles wird automatisch im Browser gespeichert</small>
+  </div>
+</div>
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="ui.js"></script>
+<script>
+  if('serviceWorker' in navigator && location.protocol.startsWith('http'))
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
