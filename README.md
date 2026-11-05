@@ -37,6 +37,10 @@ Jeder Sequenzer hat **4 Parts** mit **16 – 64 Steps** und eine programmierbare
 - Part-Button: Klick = bearbeiten & am Pattern-Ende spielen, Shift-Klick = nur bearbeiten
 - Alles wird automatisch im Browser gespeichert (`localStorage`). Mit **Export/Import** sicherst du Sessions als JSON-Datei.
 
+## Audio hakt?
+
+Oben rechts unter **Puffer** die Stufe erhöhen (Hoch → Maximal). Größerer Puffer = stabiler, aber Regler reagieren etwas verzögert. Außerdem hilft: andere Tabs/Apps schließen, Bluetooth-Kopfhörer meiden, den Laptop ans Netzteil hängen.
+
 ## Online stellen mit GitHub Pages
 
 1. Neues Repository auf GitHub anlegen (z. B. `techno-workstation`).

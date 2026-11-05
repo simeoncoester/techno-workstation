@@ -130,10 +130,10 @@ function renderPB(id){
   pb.btns.forEach((b,p) => { b.classList.toggle('edit', p===D.edit); b.classList.toggle('playing', p===pp); b.classList.toggle('queued', q===p && p!==pp); b.classList.toggle('inchain', D.chainOn && D.chain.includes(p)); });
   pb.mute.classList.toggle('playing', pp===-1); pb.mute.classList.toggle('queued', q===-1 && pp!==-1);
   pb.chainBtn.classList.toggle('on', D.chainOn);
-  const P = curPart(id); pb.lenSel.value = String(P.len);
+  const P = curPart(id); if(pb.lenSel.value !== String(P.len)) pb.lenSel.value = String(P.len);
   pb.pages.forEach((b,pg) => { b.style.display = pg*16 < P.len ? '' : 'none'; b.classList.toggle('on', pg===D.page); });
   pb.info.textContent = D.chainOn && D.chain.length ? (E.playing && RT[id] && RT[id].ci >= 0 ? `${RT[id].ci+1}/${D.chain.length}` : `${D.chain.length}×`) : '';
-  if(document.activeElement !== pb.chainIn) pb.chainIn.value = chainToText(D.chain);
+  if(document.activeElement !== pb.chainIn){ const ct = chainToText(D.chain); if(pb.chainIn.value !== ct) pb.chainIn.value = ct; }
 }
 function fxLane(id){
   const u = UI.dev[id];
@@ -591,6 +591,10 @@ function buildHeader(){
   UI.modeBtns.forEach((b,j) => b.classList.toggle('on', (j===1)===S.songMode));
   const fileIn = h('input',{type:'file', accept:'.json,application/json', style:'display:none'});
   fileIn.onchange = async () => { const f = fileIn.files[0]; if(!f) return; try { const o = JSON.parse(await f.text()); if(E.playing) togglePlay(); S = deepMerge(defaultState(), o); applyAll(); regenIR('rm',true); regenIR('hall',true); buildAll(); save(); toast('Session geladen'); } catch(e){ toast('Datei ungültig'); } fileIn.value = ''; };
+  const bufSel = sel([['low','Niedrig'],['mid','Mittel'],['high','Hoch'],['max','Maximal']], E.bufKey || 'high', v => {
+    try { localStorage.setItem('tws-buffer', v); localStorage.setItem(LSKEY, JSON.stringify(S)); } catch(e){}
+    if(E.playing) togglePlay(); toast('Audio-Puffer: ' + v + ' – lade neu …'); setTimeout(() => location.reload(), 500); }, 'zoomsel');
+  bufSel.title = 'Audio-Puffer: höher = stabiler (keine Aussetzer), niedriger = direktere Reaktion auf Regler. Aktuell ' + Math.round(((ctx.baseLatency||0) + (ctx.outputLatency||0))*1000) + ' ms Latenz.';
   const zoomSel = sel([['auto','Auto'],['0.5','50%'],['0.6','60%'],['0.7','70%'],['0.8','80%'],['0.9','90%'],['1','100%']], S.zoom, v => { S.zoom = v; fitZoom(); }, 'zoomsel');
   top.append(
     h('div',{class:'brand'}, 'TECHNO', h('span',{}, '//'), 'WORKSTATION'),
@@ -605,7 +609,7 @@ function buildHeader(){
       h('button',{title:'Session als Datei sichern', onclick:() => { const a = h('a',{href:URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'})), download:'techno-session.json'}); document.body.append(a); a.click(); a.remove(); }}, '⤓ Export'),
       h('button',{title:'Session-Datei laden', onclick:() => fileIn.click()}, '⤒ Import'), fileIn,
       h('button',{title:'Alles auf Demo zurücksetzen', onclick:() => { if(!confirm('Alles zurücksetzen? Deine Patterns gehen verloren (vorher exportieren!).')) return; if(E.playing) togglePlay(); S = defaultState(); applyAll(); regenIR('rm',true); regenIR('hall',true); buildAll(); save(); }}, '↺ Reset'),
-      h('span',{class:'zl'}, 'Zoom'), zoomSel));
+      h('span',{class:'zl'}, 'Puffer'), bufSel, h('span',{class:'zl'}, 'Zoom'), zoomSel));
 }
 
 /* ============================================================
@@ -640,7 +644,7 @@ const mbuf = new Float32Array(512);
 function frame(){
   if(ctx){
     if(E.playing){ let c = null; while(E.q.length && E.q[0].t <= ctx.currentTime) c = E.q.shift(); if(c){ E.cur = c; onStep(c); } }
-    if(ctx.state === 'running'){
+    if(ctx.state === 'running' && (frame.n = (frame.n||0) + 1) % 2 === 0){
       for(const k in UI.meters){ const m = UI.meters[k], an = k==='master' ? E.M.an : E.ch[k].an; an.getFloatTimeDomainData(mbuf);
         let pk = 0; for(let i=0;i<mbuf.length;i++){ const a = Math.abs(mbuf[i]); if(a > pk) pk = a; }
         const v = clamp((20*Math.log10(pk+1e-6)+48)/48, 0, 1); m.v = Math.max(v, m.v-0.02); m.el.style.transform = `scaleY(${m.v.toFixed(3)})`; m.el.classList.toggle('hot', pk > 0.97); }

@@ -13,7 +13,7 @@ const WAVES = ['sawtooth','square','triangle'];
 /* ---------- Helfer ---------- */
 function bq(type,f,Q){ const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; if(Q!=null) b.Q.value = Q; return b; }
 function gn(v=1){ const g = ctx.createGain(); g.gain.value = v; return g; }
-function shaper(curve){ const s = ctx.createWaveShaper(); if(curve) s.curve = curve; s.oversample = '4x'; return s; }
+function shaper(curve){ const s = ctx.createWaveShaper(); if(curve) s.curve = curve; s.oversample = '2x'; return s; }
 function tanhCurve(k){ const n=2048, c=new Float32Array(n), nk=Math.tanh(k); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.tanh(k*x)/nk; } return c; }
 function driveComp(k){ return Math.pow(Math.tanh(k)/k, 0.6); }
 function crushCurve(bits){ const n=4096, c=new Float32Array(n), st=Math.pow(2,bits)/2; for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=Math.round(x*st)/st; } return c; }
@@ -31,9 +31,9 @@ function djSet(lp,hp,v){
 function anySolo(){ return DEV_IDS.some(id => S.mix.ch[id].solo); }
 function chAudible(id){ const m = S.mix.ch[id]; return !(m.mute || (anySolo() && !m.solo)); }
 
-function makeIR(dur, damp, early){
-  const sr = ctx.sampleRate, len = Math.max(1, Math.floor(sr*dur)), b = ctx.createBuffer(2, len, sr);
-  for(let c=0;c<2;c++){
+function makeIR(dur, damp, early, chans=2){
+  const sr = ctx.sampleRate, len = Math.max(1, Math.floor(sr*dur)), b = ctx.createBuffer(chans, len, sr);
+  for(let c=0;c<chans;c++){
     const d = b.getChannelData(c); let lp = 0;
     for(let i=0;i<len;i++){
       const t = i/len, a = Math.min(0.96, damp*t*1.2 + 0.02);
@@ -56,7 +56,7 @@ function buildMaster(){
   M.tape = shaper(null); M.tapeOut = gn(1);
   M.limIn = gn(1);
   M.lim = ctx.createDynamicsCompressor(); M.lim.threshold.value = -3; M.lim.knee.value = 0; M.lim.ratio.value = 20; M.lim.attack.value = 0.001; M.lim.release.value = 0.07;
-  M.out = gn(0.8); M.clip = shaper(clipCurve()); M.clip.oversample = '2x';
+  M.out = gn(0.8); M.clip = shaper(clipCurve()); M.clip.oversample = 'none';
   M.an = ctx.createAnalyser(); M.an.fftSize = 512;
   M.in.connect(M.djLP).connect(M.djHP).connect(M.fxHP).connect(M.killHP).connect(M.punch).connect(M.mud).connect(M.air)
       .connect(M.glue).connect(M.tape).connect(M.tapeOut).connect(M.limIn).connect(M.lim).connect(M.out).connect(M.clip);
@@ -84,7 +84,7 @@ function regenIR(w, now){
   clearTimeout(irT[w]);
   const run = () => { const B = S.bus;
     if(w==='rm') E.bus.rm.conv.buffer = makeIR(0.35 + B.rmSize*1.5, 0.35, true);
-    else E.bus.hall.conv.buffer = makeIR(1.6 + B.hallSize*6, 0.6, false); };
+    else E.bus.hall.conv.buffer = makeIR(1.4 + B.hallSize*4.8, 0.6, false); };
   if(now) run(); else irT[w] = setTimeout(run, 150);
 }
 
@@ -120,21 +120,21 @@ class Channel {
 function buildDevices(){
   // RC-08
   const d8 = E.dv.d808 = {oh:null};
-  d8.bdSh = shaper(tanhCurve(1.6)); d8.bdOut = gn(0.8); d8.bdSh.connect(d8.bdOut).connect(E.ch.d808.input);
+  d8.bdSh = shaper(tanhCurve(1.6)); d8.bdSh.oversample = 'none'; d8.bdOut = gn(0.8); d8.bdSh.connect(d8.bdOut).connect(E.ch.d808.input);
   // RC-07 (mit "Grit": 6-Bit-Sample-Charakter)
   const d7 = E.dv.d707 = {oh:null};
   d7.mix = gn(1); d7.dry = gn(1); d7.wet = gn(0); d7.cr = shaper(crushCurve(5)); d7.cr.oversample = 'none'; d7.lp = bq('lowpass',15000,0.5);
   d7.mix.connect(d7.dry).connect(d7.lp); d7.mix.connect(d7.cr).connect(d7.wet).connect(d7.lp); d7.lp.connect(E.ch.d707.input);
-  d7.bdSh = shaper(tanhCurve(2.2)); d7.bdOut = gn(0.7); d7.bdSh.connect(d7.bdOut).connect(d7.mix);
+  d7.bdSh = shaper(tanhCurve(2.2)); d7.bdSh.oversample = 'none'; d7.bdOut = gn(0.7); d7.bdSh.connect(d7.bdOut).connect(d7.mix);
   // SK-01 Kick + Rumble + Sub
   const k = E.dv.ks = {};
   const out = E.ch.ks.input;
-  k.kickSh = shaper(tanhCurve(3)); k.kickOut = gn(0.8); k.kickSh.connect(k.kickOut).connect(out);
-  k.rSend = gn(0.4); k.rConv = ctx.createConvolver(); k.rConv.buffer = makeIR(2.4, 0.75, false);
-  k.rHP = bq('highpass',38,0.7); k.rLP = bq('lowpass',150,1.2); k.rSh = shaper(tanhCurve(2.5)); k.rDuck = gn(1); k.rOut = gn(1.6);
+  k.kickSh = shaper(tanhCurve(3)); k.kickSh.oversample = 'none'; k.kickOut = gn(0.8); k.kickSh.connect(k.kickOut).connect(out);
+  k.rSend = gn(0.4); k.rConv = ctx.createConvolver(); k.rConv.buffer = makeIR(1.8, 0.75, false, 1);
+  k.rHP = bq('highpass',38,0.7); k.rLP = bq('lowpass',150,1.2); k.rSh = shaper(tanhCurve(2.5)); k.rSh.oversample = 'none'; k.rDuck = gn(1); k.rOut = gn(1.6);
   k.kickOut.connect(k.rSend).connect(k.rConv).connect(k.rHP).connect(k.rLP).connect(k.rSh).connect(k.rDuck).connect(k.rOut).connect(out);
   k.sub = ctx.createOscillator(); k.sub.type = 'sine'; k.sub.frequency.value = 55;
-  k.subSh = shaper(tanhCurve(2)); k.subVca = gn(0); k.subDuck = gn(1); k.subOut = gn(0.7);
+  k.subSh = shaper(tanhCurve(2)); k.subSh.oversample = 'none'; k.subVca = gn(0); k.subDuck = gn(1); k.subOut = gn(0.7);
   k.sub.connect(k.subSh).connect(k.subVca).connect(k.subDuck).connect(k.subOut).connect(out); k.sub.start();
   // AB-03 Acid (persistente monophone Stimme)
   const a = E.dv.acid = {open:false};
@@ -147,7 +147,9 @@ function buildDevices(){
 }
 
 function initAudio(){
-  ctx = new AC({latencyHint:'interactive'});
+  const LAT = {low:'interactive', mid:'balanced', high:'playback', max:0.2};
+  const lk = localStorage.getItem('tws-buffer') || 'high'; E.bufKey = LAT[lk] !== undefined ? lk : 'high';
+  try { ctx = new AC({latencyHint:LAT[E.bufKey]}); } catch(e){ ctx = new AC(); }
   const len = ctx.sampleRate*2; E.noise = ctx.createBuffer(1, len, ctx.sampleRate);
   const nd = E.noise.getChannelData(0); for(let i=0;i<len;i++) nd[i] = Math.random()*2-1;
   buildMaster(); buildBuses();
@@ -155,6 +157,7 @@ function initAudio(){
   buildDevices();
   E.duckT = [[E.ch.acid.duck,.5],[E.ch.lead.duck,.6],[E.ch.chords.duck,.85],[E.ch.d707.duck,.12],[E.bus.hall.duck,.7],[E.bus.dly.duck,.4],[E.bus.rm.duck,.3]];
   regenIR('rm', true); regenIR('hall', true);
+  renderMetal();
   applyAll();
 }
 
@@ -162,8 +165,8 @@ function initAudio(){
 function applyCh(id){
   if(!ctx) return; const c = E.ch[id], m = S.mix.ch[id];
   setP(c.fader.gain, m.vol*m.vol*1.6);
-  if(m.drv < 0.01){ c.drive.curve = null; setP(c.driveOut.gain, 1); }
-  else { const k = 1 + m.drv*8; c.drive.curve = tanhCurve(k); setP(c.driveOut.gain, driveComp(k)); }
+  if(m.drv < 0.01){ c.drive.curve = null; c.drive.oversample = 'none'; setP(c.driveOut.gain, 1); }
+  else { const k = 1 + m.drv*8; c.drive.curve = tanhCurve(k); c.drive.oversample = '2x'; setP(c.driveOut.gain, driveComp(k)); }
   setP(c.lo.gain, m.lo*12); setP(c.hi.gain, m.hi*12);
   setP(c.comp.threshold, -m.comp*32); setP(c.comp.ratio, 1 + m.comp*7);
   djSet(c.fLP, c.fHP, m.flt);
@@ -195,7 +198,7 @@ function applyDev(id){
   if(id==='acid'){ const a = E.dv.acid;
     setP(a.gSaw.gain, P.wave ? 0 : 1); setP(a.gSq.gain, P.wave ? 0.7 : 0);
     setP(a.f1.Q, 0.5 + P.res*1.5); setP(a.f2.Q, 0.7 + P.res*19);
-    if(P.drv < 0.02){ a.dist.curve = null; setP(a.post.gain, 0.9); } else { const k = 1 + P.drv*9; a.dist.curve = tanhCurve(k); setP(a.post.gain, 0.9*driveComp(k)); } }
+    if(P.drv < 0.02){ a.dist.curve = null; a.dist.oversample = 'none'; setP(a.post.gain, 0.9); } else { const k = 1 + P.drv*9; a.dist.curve = tanhCurve(k); setP(a.post.gain, 0.9*driveComp(k)); } }
   if(id==='ks'){ const k = E.dv.ks;
     const kk = 1 + P.kdrv*6; k.kickSh.curve = tanhCurve(kk); setP(k.kickOut.gain, P.klvl*1.6*driveComp(kk));
     setP(k.rSend.gain, P.rumble*0.9); setP(k.rLP.frequency, expMap(P.rtone,60,420));
@@ -215,7 +218,16 @@ function duck(t){
    RC-08 Voices (analog-artig)
    ============================================================ */
 const METAL = [205.3,304.4,369.6,522.7,540,800];
-function metal(t,k,dur,lvl=0.22){ const sum = gn(lvl); for(const f of METAL){ const o = osc('square', f*k, t); o.connect(sum); o.stop(t+dur); } return sum; }
+function renderMetal(){
+  try {
+    const sr = ctx.sampleRate, oc = new OfflineAudioContext(1, Math.floor(sr*3), sr);
+    METAL.forEach(f => { const o = oc.createOscillator(); o.type = 'square'; o.frequency.value = f; o.connect(oc.destination); o.start(0); });
+    oc.startRendering().then(b => { E.metalBuf = b; }).catch(() => {});
+  } catch(e){}
+}
+function metal(t,k,dur,lvl=0.22){ const sum = gn(lvl);
+  if(E.metalBuf){ const s = ctx.createBufferSource(); s.buffer = E.metalBuf; s.loop = true; s.playbackRate.value = k; s.start(t, Math.random()*2); s.stop(t+dur); s.connect(sum); return sum; }
+  for(const f of METAL){ const o = osc('square', f*k, t); o.connect(sum); o.stop(t+dur); } return sum; }
 function choke(K,t){ if(!K.oh) return; for(const g of [].concat(K.oh)){ g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0,t,0.006); } K.oh = null; }
 function tom808(base){ return (t,p,v,pm,out) => {
   const L=v*p.lvl, f=base*(0.75+p.tune*0.5)*pm, dec=0.15+p.dec*0.6;
@@ -323,6 +335,15 @@ const V707 = {
 /* ============================================================
    Synth-Stimmen
    ============================================================ */
+const MAX_VOICES = 40;
+E.voices = [];
+function voiceGuard(t, v){   // ältestes Voice sanft abschneiden, wenn zu viele gleichzeitig klingen
+  const now = ctx.currentTime; E.voices = E.voices.filter(x => x.stopAt > now);
+  while(E.voices.length >= MAX_VOICES){ const o = E.voices.shift();
+    o.amp.gain.cancelScheduledValues(t); o.amp.gain.setTargetAtTime(0, t, 0.008);
+    o.oscs.forEach(x => { try { x.stop(t + 0.05); } catch(e){} }); }
+  E.voices.push(v);
+}
 function polyVoice(out,t,f,dur,vel,P,o={}){
   const n = o.n || 2, det = P.det*35, att = expMap(P.att,0.001,2.5), dec = expMap(P.dec,0.03,3), rel = expMap(P.rel,0.02,4), sus = P.sus;
   const base = expMap(P.cut,90,14000), peak = Math.min(18000, base*Math.pow(2,P.env*6)*(o.acc?1.4:1));
@@ -333,13 +354,14 @@ function polyVoice(out,t,f,dur,vel,P,o={}){
   amp.gain.setValueAtTime(0,t); amp.gain.linearRampToValueAtTime(vel,ta); amp.gain.setTargetAtTime(vel*sus,ta,dec/3); amp.gain.setTargetAtTime(0,relAt,rel/4);
   const mix = gn(1/Math.sqrt(n)); mix.connect(fl); fl.connect(amp);
   if(o.pan != null){ const p = ctx.createStereoPanner(); p.pan.value = clamp(o.pan,-1,1); amp.connect(p).connect(out); } else amp.connect(out);
-  const stopAt = relAt + rel*1.8 + 0.05;
+  const stopAt = relAt + rel*1.8 + 0.05, oscs = [];
+  voiceGuard(t, {amp, stopAt, oscs});
   for(let i=0;i<n;i++){
     const os = ctx.createOscillator(); os.type = WAVES[P.wave] || 'sawtooth'; os.frequency.setValueAtTime(f,t);
     os.detune.value = n > 1 ? (i/(n-1)*2-1)*det : 0;
     if(o.glides) o.glides.forEach(gl => os.frequency.setTargetAtTime(gl.f, gl.at, 0.025));
     if(o.spread && n > 1){ const sp = ctx.createStereoPanner(); sp.pan.value = (i/(n-1)*2-1)*o.spread; os.connect(sp).connect(mix); } else os.connect(mix);
-    os.start(t); os.stop(stopAt);
+    os.start(t); os.stop(stopAt); oscs.push(os);
   }
 }
 
@@ -494,14 +516,14 @@ let worker = null;
 function tick(){
   if(!E.playing) return;
   const now = ctx.currentTime;
-  if(E.nextT < now - 0.25) E.nextT = now + 0.02;
-  while(E.nextT < now + 0.12){
+  if(E.nextT < now - 0.3) E.nextT = now + 0.05;
+  while(E.nextT < now + 0.2){
     const sd = 60/S.bpm/4, sw = (E.g % 2) ? S.swing*0.45*sd : 0;
     scheduleStep(E.g, E.nextT + sw, sd); E.nextT += sd; E.g++;
   }
 }
 try {
-  worker = new Worker(URL.createObjectURL(new Blob(['let i=null;onmessage=e=>{clearInterval(i);if(e.data)i=setInterval(()=>postMessage(0),20)}'],{type:'text/javascript'})));
+  worker = new Worker(URL.createObjectURL(new Blob(['let i=null;onmessage=e=>{clearInterval(i);if(e.data)i=setInterval(()=>postMessage(0),25)}'],{type:'text/javascript'})));
   worker.onmessage = tick;
 } catch(e){ worker = null; }
 function timerOn(){ if(worker) worker.postMessage(1); else E.timer = setInterval(tick,20); }

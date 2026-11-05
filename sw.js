@@ -1,6 +1,6 @@
 /* Service Worker: macht die Workstation offline-fähig.
    Bei Änderungen an den Dateien VERSION hochzählen, damit Nutzer die neue Version bekommen. */
-const VERSION = 'tws-v2';
+const VERSION = 'tws-v3';
 const FILES = ['./','index.html','style.css','data.js','engine.js','ui.js','manifest.webmanifest',
   'icons/icon.svg','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png'];
 self.addEventListener('install', e => {
